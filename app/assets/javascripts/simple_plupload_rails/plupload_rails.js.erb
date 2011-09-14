@@ -1,0 +1,99 @@
+//= javascript_include_tag "http://bp.yahooapis.com/2.4.21/browserplus-min.js"
+//= require ./plupload
+//= require ./plupload.gears
+//= require ./plupload.silverlight
+//= require ./plupload.flash
+//= require ./plupload.browserplus
+//= require ./plupload.html4
+//= require ./plupload.html5
+
+$(function() {
+  var pluploadButtonNr = 0;
+  $(".plupload").each(function() {
+    var form = $(this).parents("form").first();
+    if ($(this).attr("id") == undefined) $(this).attr("id", Date.now().valueOf().toString() + "-" + pluploadButtonNr.toString());
+    
+    $(this).click(function(e) {
+      e.preventDefault();
+      return false;
+    });
+    
+    var formListField = $(this).attr("data-fieldname");
+    var fileList = $('<div id="'+$(this).attr("id")+'-filelist"></div>');
+    fileList.insertBefore($(this));
+    
+    multipart_parameters = {};
+    csrf_param = $("meta[name=csrf-param]");
+    csrf_token = $("meta[name=csrf-token]");
+    if (csrf_param.length > 0 && csrf_token.length > 0)
+      multipart_parameters[csrf_param.attr("content")] = csrf_token.attr("content");
+    
+    var uploader = new plupload.Uploader({
+      runtimes : 'gears,html5,flash,silverlight,browserplus',
+      browse_button : $(this).attr("id"),
+      max_file_size : '10mb',
+      url : $(this).attr("data-url"),
+      resize : {width : 320, height : 240, quality : 90},
+      flash_swf_url : '<%= image_path("simple_plupload_rails/plupload.flash.swf") %>',
+      silverlight_xap_url : '<%= image_path("simple_plupload_rails/plupload.silverlight.xap") %>',
+      multipart: true,
+      multipart_params: multipart_parameters,
+      filters : [
+        {title : "Image files", extensions : "jpg,gif,png"}
+      ]
+    });
+
+    uploader.bind('UploadFile', function(up, file) {
+    });
+    
+    uploader.bind('FileUploaded', function(up, file, respObj) {
+      //resp = $.parseJSON(respObj.response);
+  	  file_field = $('<input type="hidden" name="'+formListField+'[]" value="" />');
+  	  file_field.attr("value", respObj.response);
+  	  form.append(file_field);
+    });
+
+    uploader.bind('UploadProgress', function(up, file) {
+	    $('#'+file.id+" b").html('<span>' + file.percent + "%</span>");
+    });
+
+    uploader.bind('FilesAdded', function(up, files) {
+	    for (var i in files) {
+		    fileList.append('<div id="' + files[i].id + '">' + files[i].name + ' (' + plupload.formatSize(files[i].size) + ') <b></b></div>');
+	    }
+	    window.setTimeout(function() {
+	      uploader.start();
+	    }, 100);
+    });
+
+    uploader.bind('UploadComplete', function(up, file) {
+      if (form.children("input[type=submit]").first().attr("disabled") == true)
+      {
+        $(window).unbind('beforeunload');
+        form.children("input[type=submit]").attr("disabled", false);
+        form.submit();
+      }
+    });
+
+    uploader.init();
+
+    form.children("input[type=submit]").attr("disabled", false); // FF bug
+    form.submit(function(e) {
+      if (uploader.total.queued > 0 && uploader.total.percent < 100)
+      {
+        uploader.start();
+        $(this).children("input[type=submit]").val("Uploading files ...").attr("disabled", true);
+        $(window).bind('beforeunload', function(){
+          return 'Files are still being uploaded. Are you sure you want to cancel?';
+        });
+        e.preventDefault();
+        return false;
+      } else {
+        return true;
+      }
+    });
+
+    pluploadButtonNr++;
+  });
+
+});
